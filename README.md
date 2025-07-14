@@ -6,18 +6,31 @@
 
 #### Part 1. Loading, cleaning, and scaling data ####
 
-M001 <- read.csv("M001_Shore_alpha_acoustic_indices_results.csv")
-head(M001)
-
+# Load packages
 library(corrplot)
 library(caret)
+library(stringr)
+library(lubridate)
+library(dplyr)
+library(hms)
+library(ggplot2)
+
+# Load data
+M001 <- read.csv("M001_Shore_alpha_acoustic_indices_results.csv")
+M002 <- read.csv("M002_Myriophyllum_alpha_acoustic_indices_results.csv")
+M003 <- read.csv("M003_Myriophyllum_alpha_acoustic_indices_results.csv")
+M004 <- read.csv("M004_Pelagic_alpha_acoustic_indices_results.csv")
+M005 <- read.csv("M005_Pelagic_alpha_acoustic_indices_results.csv")
+
+# Merge all data sets into one
+merged_data <- rbind(M001, M002, M003, M004, M005)
+head(merged_data)
 
 # Extract filename
-
-Filename <- M001$filename
+Filename <- merged_data$filename
 
 # Subset numeric columns from 2 to 61
-numeric_data <- M001[, 2:61]
+numeric_data <- merged_data[, 2:61]
 
 # Compute correlation matrix
 cor_matrix <- cor(numeric_data, use = "complete.obs")
@@ -25,7 +38,6 @@ cor_matrix <- cor(numeric_data, use = "complete.obs")
 # Plot correlation matrix
 corrplot(cor_matrix, method = "color", type = "upper", 
          tl.cex = 0.7, tl.col = "black", addCoef.col = "black", number.cex = 0.5)
-
 print(cor_matrix)
 
 # Find indices of highly correlated variables (threshold > 0.8)
@@ -47,78 +59,115 @@ summary(z_scaled_data)
 z_scaled_data <- cbind(Filename, z_scaled_data)
 head(z_scaled_data)
 
+# Extract site information and store in a new column called site
+z_scaled_data$Site <- str_extract(z_scaled_data$Filename, "^.*?_.*?(?=_)")
+head(z_scaled_data[c("Filename", "Site")])
+
+#Extract datetime
+z_scaled_data <- z_scaled_data %>%
+  mutate(
+    # Extract datetime string (e.g., "20250513_120000") using regex
+    datetime_str = str_extract(Filename, "\\d{8}_\\d{6}"),
+    
+    # Parse into POSIXct format (YYYYMMDD_HHMMSS)
+    Datetime = as.POSIXct(datetime_str, format = "%Y%m%d_%H%M%S")
+  )
+
+# Round timestamps to the nearest 10
+z_scaled_data <- z_scaled_data %>%
+  mutate(
+    Datetime = round_date(Datetime, unit = "10 minutes")
+  )
+
+head(z_scaled_data)
+
 #### Part 2. Tapestry plots with 1 index ####
 
-# Load necessary packages
-library(lubridate)
-library(dplyr)
-library(hms)
-library(ggplot2)
+# Define base output directory
+base_output_dir <- "C:/Users/jgreenhalgh/OneDrive - McGill University/Gault Data/May - July 2025"
 
-# Set working directory for saving plots (use forward slashes)
-output_dir <- "C:/Users/jgreenhalgh/OneDrive - McGill University/Gault Data/May - July 2025/M001"
-dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
-setwd(output_dir)
-
-
-# Identify numeric columns to scale (excluding time-related ones)
-cols_to_exclude <- c("Datetime", "time_posix")
-numeric_vars <- names(z_scaled_data)[sapply(z_scaled_data, is.numeric)]
-cols_to_plot <- setdiff(numeric_vars, cols_to_exclude)
-
-# Apply min-max scaling
+# Min-max scaling function
 min_max_scale <- function(x) {
   (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
 }
-z_scaled_data_scaled <- z_scaled_data
-z_scaled_data_scaled[cols_to_plot] <- lapply(z_scaled_data_scaled[cols_to_plot], min_max_scale)
 
-# Ensure time columns exist
-if (!"date" %in% colnames(z_scaled_data_scaled)) {
-  z_scaled_data_scaled <- z_scaled_data_scaled %>%
+# Split main dataframe by Site
+site_dfs <- split(z_scaled_data, z_scaled_data$Site)
+
+# Loop through each site
+for (site_name in names(site_dfs)) {
+  
+  site_data <- site_dfs[[site_name]]
+  
+  # Skip if 'Datetime' column is missing
+  if (!"Datetime" %in% names(site_data)) {
+    warning(paste("Skipping site:", site_name, "- missing 'Datetime' column"))
+    next
+  }
+  
+  # Ensure Datetime is POSIXct
+  if (!inherits(site_data$Datetime, "POSIXct")) {
+    site_data$Datetime <- as.POSIXct(site_data$Datetime)
+  }
+  
+  # Identify numeric columns to scale
+  cols_to_exclude <- c("Datetime", "time_posix")
+  numeric_vars <- names(site_data)[sapply(site_data, is.numeric)]
+  cols_to_plot <- setdiff(numeric_vars, cols_to_exclude)
+  
+  # Apply min-max scaling
+  site_data_scaled <- site_data
+  site_data_scaled[cols_to_plot] <- lapply(site_data_scaled[cols_to_plot], min_max_scale)
+  
+  # Add date and time_of_day columns
+  site_data_scaled <- site_data_scaled %>%
     mutate(
       date = as.Date(Datetime),
       time_of_day = as_hms(Datetime)
     )
-}
-
-# Loop through each variable and generate + save plots
-for (var in cols_to_plot) {
-  # Generate grayscale HEX color based on the current variable
-  z_scaled_data_scaled$HEX_codes <- rgb(
-    red = z_scaled_data_scaled[[var]],
-    green = z_scaled_data_scaled[[var]],
-    blue = z_scaled_data_scaled[[var]],
-    maxColorValue = 1
-  )
   
-  # Create the plot
-  p <- ggplot(z_scaled_data_scaled, aes(x = time_of_day, y = date)) +
-    geom_tile(aes(fill = HEX_codes), color = "black") +
-    scale_fill_identity() +
-    labs(
-      title = paste("Heatmap of", var),
-      x = "Time of Day",
-      y = "Date"
-    ) +
-    scale_x_time(
-      breaks = scales::breaks_width("2 hours"),
-      labels = scales::time_format("%H:%M")
-    ) +
-    scale_y_date(
-      date_breaks = "1 week",
-      date_labels = "%b %d"
-    ) +
-    theme_bw()
+  # Create subfolder for this site
+  site_output_dir <- file.path(base_output_dir, site_name)
+  dir.create(site_output_dir, showWarnings = FALSE, recursive = TRUE)
   
-  # Save the plot as PNG
-  ggsave(
-    filename = paste0("Heatmap_", var, ".png"),
-    plot = p,
-    width = 10,
-    height = 10,
-    dpi = 300
-  )
+  # Loop through each variable to plot
+  for (var in cols_to_plot) {
+    # Generate grayscale HEX codes
+    site_data_scaled$HEX_codes <- rgb(
+      red = site_data_scaled[[var]],
+      green = site_data_scaled[[var]],
+      blue = site_data_scaled[[var]],
+      maxColorValue = 1
+    )
+    
+    # Create heatmap
+    p <- ggplot(site_data_scaled, aes(x = time_of_day, y = date)) +
+      geom_tile(aes(fill = HEX_codes), color = "black") +
+      scale_fill_identity() +
+      labs(
+        title = paste("Heatmap of", var, "at", site_name),
+        x = "Time of Day",
+        y = "Date"
+      ) +
+      scale_x_time(
+        breaks = scales::breaks_width("2 hours"),
+        labels = scales::time_format("%H:%M")
+      ) +
+      scale_y_date(
+        date_breaks = "1 week",
+        date_labels = "%b %d"
+      ) +
+      theme_bw()
+    
+    # Save to file
+    ggsave(
+      filename = file.path(site_output_dir, paste0("Heatmap_", var, ".png")),
+      plot = p,
+      width = 10,
+      height = 10,
+      dpi = 300
+    )
+  }
 }
 
 #### Part 3. Tapestry plots with 3 indices ####
@@ -162,16 +211,16 @@ z_scaled_data_scaled[cols_to_scale] <- lapply(z_scaled_data_scaled[cols_to_scale
 
 # Generate HEX codes using selected indices
 z_scaled_data_scaled$HEX_codes <- rgb(
-  red = z_scaled_data_scaled$BioEnergy,
-  green = z_scaled_data_scaled$BioEnergy,
-  blue = z_scaled_data_scaled$BioEnergy,
+  red = z_scaled_data_scaled$EAS,
+  green = z_scaled_data_scaled$HFC,
+  blue = z_scaled_data_scaled$Ht,
   maxColorValue = 1
 )
 
 # Regenerate time_posix from rounded datetime_string (for safety)
 z_scaled_data_scaled$time_posix <- as.POSIXct(z_scaled_data_scaled$datetime_string, format = "%Y%m%d_%H%M%S")
 
-# 🖼️ Create the plot
+# Create the plot
 ggplot(z_scaled_data_scaled, aes(x = time_of_day, y = date)) + 
   geom_tile(aes(fill = HEX_codes), color = "black") + 
   labs(x = "Time of day", y = "Date") + 
@@ -185,4 +234,5 @@ ggplot(z_scaled_data_scaled, aes(x = time_of_day, y = date)) +
   ) + 
   theme_bw() + 
   scale_fill_identity()
+
 ```
