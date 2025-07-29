@@ -236,3 +236,57 @@ ggplot(z_scaled_data_scaled, aes(x = time_of_day, y = date)) +
   scale_fill_identity()
 
 ```
+
+
+### Automatic BirdNET extraction ###
+
+```
+setwd("D:/BirdNET output")
+
+# Define column types
+column_types <- cols(
+  `Start (s)` = col_double(),
+  `End (s)` = col_double(),
+  `Low Freq (Hz)` = col_double(),
+  `High Freq (Hz)` = col_double(),
+  `Confidence` = col_double(),
+  `Species` = col_character(),
+  .default = col_character()
+)
+
+# Get folder names in working directory
+folders <- list.dirs(path = ".", full.names = FALSE, recursive = FALSE)
+
+# Loop through each folder
+for (folder in folders) {
+  folder_path <- file.path(getwd(), folder)
+  
+  # List all .csv files in the folder
+  csv_files <- list.files(folder_path, pattern = "\\.csv$", full.names = TRUE)
+  
+  # Skip if no CSV files found
+  if (length(csv_files) == 0) next
+  
+  # Read and combine all .csv files
+  combined_data <- lapply(csv_files, function(file) {
+    read_csv(file, col_types = column_types, show_col_types = FALSE) %>%
+      mutate(source_file = basename(file))
+  }) %>% bind_rows()
+  
+  # Create dynamic filename based on folder name
+  output_filename <- paste0(folder, "_Combined_Results.csv")
+  output_path <- file.path(folder_path, output_filename)
+  
+  # Write the combined data to CSV
+  write_csv(combined_data, output_path)
+  
+  # Optional: load the result and drop unnecessary columns (adjust indices as needed)
+  temp_data <- read.csv(output_path)
+  if (ncol(temp_data) >= 18) {
+    temp_data <- temp_data[, -c(10:18)]
+  }
+  assign(folder, temp_data)
+  
+  cat("Processed folder:", folder, "\n")
+}
+```
