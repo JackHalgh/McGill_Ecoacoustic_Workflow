@@ -290,3 +290,211 @@ for (folder in folders) {
   cat("Processed folder:", folder, "\n")
 }
 ```
+
+### BirdNET 
+
+```
+library(dplyr)
+library(readr)
+
+##### Part 1. Loading and combining BirdNET output #####
+
+setwd("D:/BirdNET output")
+
+# Define column types
+column_types <- cols(
+  `Start (s)` = col_double(),
+  `End (s)` = col_double(),
+  `Low Freq (Hz)` = col_double(),
+  `High Freq (Hz)` = col_double(),
+  `Confidence` = col_double(),
+  `Species` = col_character(),
+  .default = col_character()
+)
+
+# Get folder names in working directory
+folders <- list.dirs(path = ".", full.names = FALSE, recursive = FALSE)
+
+# Loop through each folder
+for (folder in folders) {
+  folder_path <- file.path(getwd(), folder)
+  
+  # List all .csv files in the folder
+  csv_files <- list.files(folder_path, pattern = "\\.csv$", full.names = TRUE)
+  
+  # Skip if no CSV files found
+  if (length(csv_files) == 0) next
+  
+  # Read and combine all .csv files
+  combined_data <- lapply(csv_files, function(file) {
+    read_csv(file, col_types = column_types, show_col_types = FALSE) %>%
+      mutate(source_file = basename(file))
+  }) %>% bind_rows()
+  
+  # Create dynamic filename based on folder name
+  output_filename <- paste0(folder, "_Combined_Results.csv")
+  output_path <- file.path(folder_path, output_filename)
+  
+  # Write the combined data to CSV
+  write_csv(combined_data, output_path)
+  
+  # Optional: load the result and drop unnecessary columns (adjust indices as needed)
+  temp_data <- read.csv(output_path)
+  if (ncol(temp_data) >= 18) {
+    temp_data <- temp_data[, -c(10:18)]
+  }
+  assign(folder, temp_data)
+  
+  cat("Processed folder:", folder, "\n")
+}
+
+##### Part 2. Top 50 species #####
+
+# Get list of all CSV files in the working directory
+csv_files <- list.files(pattern = "\\.csv$")
+
+# Read all CSV files into a list of data frames
+data_list <- lapply(csv_files, read.csv)
+
+# Optionally, name each element of the list after the file (without .csv extension)
+names(data_list) <- tools::file_path_sans_ext(csv_files)
+
+library(dplyr)
+library(forcats)
+library(stringr)
+
+library(dplyr)
+library(forcats)
+library(stringr)
+
+# Function to extract habitat from dataset name
+extract_habitat <- function(name) {
+  case_when(
+    str_detect(name, "River") ~ "River",
+    str_detect(name, "Maple_Beech") ~ "Maple_Beech",
+    str_detect(name, "Oak") ~ "Oak",
+    str_detect(name, "Wetland") ~ "Wetland",
+    str_detect(name, "Beaver_Pond") ~ "Beaver_Pond",
+    str_detect(name, "Lake_Shore") ~ "Lake_Shore",
+    TRUE ~ "Unknown"
+  )
+}
+
+# Loop through each data frame in the list
+for (name in names(data_list)) {
+  df <- data_list[[name]]
+  
+  # Get top 50 species and reorder
+  top_50_species <- df %>%
+    count(Common.name, sort = TRUE) %>%
+    slice_head(n = 50) %>%
+    pull(Common.name)
+  
+  top_data <- df %>%
+    filter(Common.name %in% top_50_species) %>%
+    mutate(Common.name = fct_infreq(Common.name))
+  
+  # Compute counts per species for labels
+  species_counts <- top_data %>%
+    count(Common.name) %>%
+    mutate(label = paste0("n = ", n))
+  
+  # Extract habitat name from the dataset name
+  habitat <- extract_habitat(name)
+  species_counts <- species_counts %>%
+    mutate(Habitat = habitat)
+  
+  # Write to CSV using the name of the dataset
+  output_filename <- paste0(name, "_Top_50.csv")
+  write.csv(species_counts, output_filename, row.names = FALSE)
+}
+
+##### Part 3. NMDS ####
+
+library(dplyr)
+library(readr)
+
+# List all exported _Top_50.csv files in the directory
+top50_files <- list.files(pattern = "_Top_50\\.csv$")
+
+# Read and combine all files into a single data frame
+combined_top50 <- top50_files %>%
+  lapply(read_csv) %>%
+  bind_rows()
+
+# Write combined data to a single CSV
+write_csv(combined_top50, "All_Sites_Top_50_Merged.csv")
+
+library(dplyr)
+library(tidyr)
+library(vegan)
+
+# Step 1: Summarize total counts per Habitat and Species (in case of duplicates)
+summary_data <- combined_top50 %>%
+  group_by(Habitat, Common.name) %>%
+  summarise(total_n = sum(n), .groups = "drop")
+
+# Step 2: Pivot to wide format (species matrix)
+species_matrix <- summary_data %>%
+  pivot_wider(names_from = Common.name, values_from = total_n, values_fill = list(total_n = 0))
+
+# Step 3: Prepare matrix for NMDS
+community_matrix <- as.data.frame(species_matrix[,-1])
+rownames(community_matrix) <- species_matrix$Habitat
+
+# Step 4: Run NMDS using Bray-Curtis distance
+nmds <- metaMDS(community_matrix, distance = "bray", k = 2, trymax = 100)
+
+# Step 5: Plot NMDS results
+plot(nmds, type = "t", main = "NMDS of Bird Communities by Habitat")
+
+
+#### Part 4 Plotting NMDS ####
+
+library(ggplot2)
+library(dplyr)
+library(ggrepel)  
+
+# Extract NMDS site scores (habitats)
+site_scores <- as.data.frame(scores(nmds, display = "sites")) %>%
+  mutate(Label = rownames(.), Type = "Habitat")
+
+# Extract NMDS species scores
+species_scores <- as.data.frame(scores(nmds, display = "species")) %>%
+  mutate(Label = rownames(.), Type = "Species")
+
+# Combine both into one data frame
+nmds_plot_data <- bind_rows(site_scores, species_scores)
+
+# Separate species and habitat for plotting
+species_only <- filter(nmds_plot_data, Type == "Species")
+habitat_only <- filter(nmds_plot_data, Type == "Habitat")
+
+ggplot() +
+  # Plot habitat points
+  geom_point(data = habitat_only, aes(x = NMDS1, y = NMDS2), color = "steelblue", size = 4, shape = 16) +
+  
+  # Label habitats (optional: just points are often clear enough)
+  geom_text_repel(data = habitat_only, aes(x = NMDS1, y = NMDS2, label = Label),
+                  size = 4, fontface = "bold", color = "steelblue") +
+  
+  # Label species (text only, black, repel to avoid overlap, no lines)
+  geom_text_repel(data = species_only, aes(x = NMDS1 + 0.05, y = NMDS2 + 0.05, label = Label),
+                  size = 3, color = "black", segment.color = NA) +
+  
+  theme_bw() +
+  labs(
+    x = "NMDS1",
+    y = "NMDS2",
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)
+  )
+
+```
+
+
+
+
