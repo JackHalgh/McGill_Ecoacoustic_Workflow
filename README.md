@@ -495,6 +495,135 @@ ggplot() +
 
 ```
 
+### Plotting BirdNET call count and species richness ###
+
+```
+# Load necessary library
+library(dplyr)
+
+# Set working directory
+setwd("C:/Users/jgreenhalgh/OneDrive - McGill University/Gault Data/All_Top_50")
+
+# List all CSV files in the directory
+csv_files <- list.files(pattern = "\\.csv$", full.names = TRUE)
+
+# Read each CSV into a list of data frames
+data_list <- lapply(csv_files, read.csv, stringsAsFactors = FALSE)
+
+# Name each list element by the file name (without extension)
+names(data_list) <- tools::file_path_sans_ext(basename(csv_files))
+
+# Combine all data frames into one (handles mismatched columns)
+combined_data <- bind_rows(data_list)
+
+combined_data <- combined_data[-71138, ]
+
+combined_data <- combined_data %>%
+  select(-sensitivity, -min_conf)
+
+# Check result
+head(combined_data)
+
+library(lubridate)
+
+combined_data <- combined_data %>%
+  mutate(
+    # Extract the YYYYMMDD_HHMMSS part using regex
+    datetime_str = sub("(\\d{8}_\\d{6}).*", "\\1", source_file),
+    # Parse it into POSIXct datetime
+    Datetime = ymd_hms(gsub("_", " ", datetime_str))
+  ) %>%
+  select(-datetime_str)  # Remove helper column
+
+# Check result
+head(combined_data)
+
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+combined_data %>%
+  mutate(Month = floor_date(Datetime, "month")) %>%
+  group_by(Habitat, Month) %>%
+  summarise(Count = n()) %>%
+  ggplot(aes(x = Month, y = Count, color = Habitat)) +
+  geom_line() +
+  labs(x = "Month", y = "Number of Detections") +
+  theme_bw()
+
+
+#### Total call count ####
+
+# Aggregate call count per Habitat, Date, and Hour (excluding NA Hour)
+call_count_data <- combined_data %>%
+  mutate(
+    Date = as.Date(Datetime),
+    Hour = hour(Datetime)  # Extract hour from Datetime
+  ) %>%
+  filter(!is.na(Hour)) %>%    # Remove rows with NA Hour
+  group_by(Habitat, Date, Hour) %>%
+  summarise(CallCount = n(), .groups = "drop") %>%  # Count calls instead of species richness
+  mutate(HourLabel = sprintf("%02d:00", Hour))
+
+# Plot heatmap of call count with formatted Hour labels
+p_callcount <- ggplot(call_count_data, aes(y = Date, x = factor(HourLabel, levels = sprintf("%02d:00", 0:23)), fill = CallCount)) +
+  geom_tile(color = "white") +
+  facet_wrap(~ Habitat, scales = "free_y") +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90") +
+  labs(
+    y = "Date",
+    x = "Hour of day",
+    fill = "Call count"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_text(face = "bold")
+  )
+
+print(p_callcount)
+
+ggsave("call_count_heatmap_with_time.jpeg", plot = p_callcount, device = "jpeg",
+       width = 14, height = 10, units = "in", dpi = 300)
+
+
+#### Species richness ####
+
+# Aggregate species richness per Habitat, Date, and Hour (excluding NA Hour)
+richness_data <- combined_data %>%
+  mutate(
+    Date = as.Date(Datetime),
+    Hour = hour(Datetime)  # Extract hour from Datetime
+  ) %>%
+  filter(!is.na(Hour)) %>%    # Remove rows with NA Hour
+  group_by(Habitat, Date, Hour) %>%
+  summarise(SpeciesRichness = n_distinct(Scientific.name), .groups = "drop") %>%
+  mutate(HourLabel = sprintf("%02d:00", Hour))
+
+# Plot heatmap with formatted Hour labels
+p_richness <- ggplot(richness_data, aes(y = Date, x = factor(HourLabel, levels = sprintf("%02d:00", 0:23)), fill = SpeciesRichness)) +
+  geom_tile(color = "white") +
+  facet_wrap(~ Habitat, scales = "free_y") +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey90") +
+  labs(
+    y = "Date",
+    x = "Hour of day",
+    fill = "Species richness"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_text(face = "bold")
+  )
+
+print(p_richness)
+
+ggsave("species_richness_heatmap_with_time.jpeg", plot = p_richness, device = "jpeg",
+       width = 14, height = 10, units = "in", dpi = 300)
+
+```
+
 
 
 
