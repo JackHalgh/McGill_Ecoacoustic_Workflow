@@ -1027,8 +1027,7 @@ p2 <- ggplot(pca_scores, aes(x = PC1, y = PC2, color = Site)) +
 
 ggsave("Terrestrial_pca_plots.jpeg", plot = p2, width = 8, height = 6, units = "in", dpi = 300)
 
-![Image](https://github.com/user-attachments/assets/80fb2aad-c6db-4bd4-a053-68a480fd2a0e)
-
+![Image](https://github.com/user-attachments/assets/c6a91812-525f-405e-b2b6-54b518c251de)
 ```
 
 
