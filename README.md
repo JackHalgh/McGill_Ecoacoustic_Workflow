@@ -1011,6 +1011,24 @@ p1 <- ggplot(pca_scores, aes(x = PC1, y = PC2, color = Site)) +
   coord_cartesian(xlim = c(-10, 10), ylim = c(-10, 10))
 
 p1
+
+
+p2 <- ggplot(pca_scores, aes(x = PC1, y = PC2, color = Site)) +
+  geom_point(size = 1, alpha = 0.1) +
+  stat_ellipse(level = 0.95, linetype = 2, size = 1) +  
+  scale_color_manual(values = site_colors) +
+  theme_bw() +
+  labs(
+    x = paste0("PC1 (", sprintf("%.1f", var_explained[1]), "%)"),
+    y = paste0("PC2 (", sprintf("%.1f", var_explained[2]), "%)")
+  ) +
+  coord_cartesian(xlim = c(-10, 10), ylim = c(-10, 10)) +
+  facet_wrap(~ Site, ncol = 3) 
+
+ggsave("Terrestrial_pca_plots.jpeg", plot = p2, width = 8, height = 6, units = "in", dpi = 300)
+
+![Image](https://github.com/user-attachments/assets/80fb2aad-c6db-4bd4-a053-68a480fd2a0e)
+
 ```
 
 
