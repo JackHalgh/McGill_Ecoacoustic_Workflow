@@ -1,5 +1,122 @@
 # McGill_Ecoacoustic_Workflow
 
+This repository contains R workflows for analyzing **freshwater and terrestrial ecoacoustic data**, as well as BirdNET outputs for bird species detection and ordination.
+
+---
+
+## Contents
+
+1. [Freshwater Workflow](#freshwater-workflow)
+   - [Part 1: Loading, Cleaning, and Scaling Data](#part-1-loading-cleaning-and-scaling-data)
+   - [Part 2: Tapestry Plots with 1 Index](#part-2-tapestry-plots-with-1-index)
+   - [Part 3: Tapestry Plots with 3 Indices](#part-3-tapestry-plots-with-3-indices)
+   - [Part 4: Ordination](#part-4-ordination)
+   - [Part 5: Interactive Shiny PCA App](#part-5-interactive-shiny-pca-app)
+
+2. [Terrestrial Workflow](#terrestrial-workflow)
+   - [Part 1: Loading, Cleaning, and Scaling Data](#part-1-loading-cleaning-and-scaling-data-1)
+   - [Part 2: Tapestry Plots with 1 Index](#part-2-tapestry-plots-with-1-index-1)
+   - [Part 3: Tapestry Plots with 3 Indices](#part-3-tapestry-plots-with-3-indices-1)
+   - [Part 4: Ordination](#part-4-ordination-1)
+
+3. [Automatic BirdNET Extraction](#automatic-birdnet-extraction)
+   - [Part 1: Loading and Combining BirdNET Output](#part-1-loading-and-combining-birdnet-output)
+   - [Part 2: Top 50 Species](#part-2-top-50-species)
+   - [Part 3: NMDS](#part-3-nmds)
+   - [Part 4: Plotting NMDS](#part-4-plotting-nmds)
+   - [BirdNET Call Count and Species Richness](#birdnet-call-count-and-species-richness)
+
+---
+
+## Freshwater Workflow
+
+### Part 1: Loading, Cleaning, and Scaling Data
+- Load raw acoustic index CSV files
+- Merge datasets across months and sites
+- Compute correlation matrices and remove highly correlated indices
+- Z-transform data
+- Extract site and datetime information
+- Round timestamps to nearest 10 minutes
+- Detect gaps in time series
+
+### Part 2: Tapestry Plots with 1 Index
+- Min-max scale numeric indices
+- Generate monochrome heatmaps for each site and index
+- Save heatmaps as PNG
+
+### Part 3: Tapestry Plots with 3 Indices
+- Filter data for specific sites
+- Generate RGB HEX codes from three indices
+- Plot multicolor heatmaps by date and time
+
+### Part 4: Ordination
+- Filter for full days and downsample to equalize site data
+- Perform PCA on scaled numeric data
+- Generate scatter plots and faceted PCA plots
+
+### Part 5: Interactive Shiny PCA App
+- Create a Shiny app to highlight PCA points by site
+- Interactive selection of sites to visualize ellipses and points
+
+---
+
+## Terrestrial Workflow
+
+### Part 1: Loading, Cleaning, and Scaling Data
+- Load raw acoustic index CSV files
+- Merge datasets across months and sites
+- Compute correlation matrices and remove highly correlated indices
+- Z-transform data
+- Extract site and datetime information
+- Round timestamps to nearest 10 minutes
+- Detect gaps in time series
+
+### Part 2: Tapestry Plots with 1 Index
+- Min-max scale numeric indices
+- Generate monochrome heatmaps for each site and index
+- Save heatmaps as PNG
+
+### Part 3: Tapestry Plots with 3 Indices
+- Filter data for specific sites
+- Generate RGB HEX codes from three indices
+- Plot multicolor heatmaps by date and time
+
+### Part 4: Ordination
+- Filter for full days and downsample to equalize site data
+- Perform PCA on scaled numeric data
+- Generate scatter plots and faceted PCA plots
+
+---
+
+## Automatic BirdNET Extraction
+
+### Part 1: Loading and Combining BirdNET Output
+- Read BirdNET CSV files from multiple folders
+- Combine CSVs by folder
+- Drop unnecessary columns and save cleaned files
+
+### Part 2: Top 50 Species
+- Identify top 50 most detected species per site
+- Summarize counts and create CSVs for each habitat
+
+### Part 3: NMDS
+- Combine all Top 50 CSVs into a single matrix
+- Perform NMDS ordination using Bray-Curtis distance
+- Generate ordination plots
+
+### Part 4: Plotting NMDS
+- Plot habitat and species scores
+- Use `ggrepel` for clear labeling
+- Customize colors and point sizes
+
+### BirdNET Call Count and Species Richness
+- Aggregate call counts per habitat, date, and hour
+- Generate heatmaps for call counts
+- Calculate species richness per habitat
+- Generate heatmaps for species richness
+
+---
+
 ## Freshwater workflow
 
 ```
