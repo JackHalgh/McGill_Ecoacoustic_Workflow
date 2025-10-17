@@ -1,5 +1,7 @@
 # McGill_Ecoacoustic_Workflow
 
+## Freshwater workflow
+
 ```
 #By Jack A. Greenhalgh. June, 2025.
 #Department of Biology, McGill University, 1205 Dr Penfield Ave, Montreal, Quebec, H3A 1B1, Canada.
@@ -622,6 +624,393 @@ print(p_richness)
 ggsave("species_richness_heatmap_with_time.jpeg", plot = p_richness, device = "jpeg",
        width = 14, height = 10, units = "in", dpi = 300)
 
+```
+
+## Terrestrial workflow
+
+```
+#### Part 1. Loading, cleaning, and scaling data ####
+
+# Load packages
+library(corrplot)
+library(caret)
+library(stringr)
+library(lubridate)
+library(dplyr)
+library(hms)
+library(ggplot2)
+
+# Set working directory
+setwd("C:/Users/Administrador/OneDrive - McGill University/Gault Data/Raw acoustic indices (terrestrial)")
+
+# Load data
+J001_May_July_2025 <- read.csv("J001_Maple_Beech_alpha_acoustic_indices_results_May_July_2025.csv")
+J001_July_August_2025 <- read.csv("J001_Maple_Beech_alpha_acoustic_indices_results_July_August_2025.csv")
+J002_May_July_2025 <- read.csv("J002_Oak_alpha_acoustic_indices_results_May_July_2025.csv")
+J002_July_August_2025 <- read.csv("J002_Oak_alpha_acoustic_indices_results_July_August_2025.csv")
+J003_May_July_2025 <- read.csv("J003_Lake_Shore_alpha_acoustic_indices_results_May_July_2025.csv")
+J003_July_August_2025 <- read.csv("J003_Lake_Shore_alpha_acoustic_indices_results_July_August_2025.csv")
+M006_May_July_2025 <- read.csv("M006_Beaver_Pond_alpha_acoustic_indices_results_May_July_2025.csv")
+M006_July_August_2025 <- read.csv("M006_Beaver_Pond_alpha_acoustic_indices_results_July_August_2025.csv")
+M007_May_July_2025 <- read.csv("M007_Wetland_alpha_acoustic_indices_results_May_July_2025.csv")  
+M007_July_August_2025 <- read.csv("M007_Wetland_alpha_acoustic_indices_results_July_August_2025.csv")  
+M008_May_July_2025 <- read.csv("M008_Oak_alpha_acoustic_indices_results_May_July_2025.csv")
+M008_July_August_2025 <- read.csv("M008_Oak_alpha_acoustic_indices_results_July_August_2025.csv")
+M009_May_July_2025 <- read.csv("M009_Maple_Beech_alpha_acoustic_indices_results_May_July_2025.csv")
+M009_July_August_2025 <- read.csv("M009_Maple_Beech_alpha_acoustic_indices_results_July_August_2025.csv")
+M010_May_July_2025 <- read.csv("M010_Beaver_Pond_alpha_acoustic_indices_results_May_July_2025.csv")  
+M010_July_August_2025 <- read.csv("M010_Beaver_Pond_alpha_acoustic_indices_results_July_August_2025.csv")  
+
+# Merge all data sets into one
+merged_data <- rbind(
+  J001_May_July_2025, J001_July_August_2025,
+  J002_May_July_2025, J002_July_August_2025,
+  J003_May_July_2025, J003_July_August_2025,
+  M006_May_July_2025, M006_July_August_2025,
+  M007_May_July_2025, M007_July_August_2025,
+  M008_May_July_2025, M008_July_August_2025,
+  M009_May_July_2025, M009_July_August_2025,
+  M010_May_July_2025, M010_July_August_2025
+)
+head(merged_data)
+
+# Extract filename
+Filename <- merged_data$filename
+
+# Subset numeric columns from 2 to 61
+numeric_data <- merged_data[, 2:61]
+
+# Compute correlation matrix
+cor_matrix <- cor(numeric_data, use = "complete.obs")
+
+# Plot correlation matrix
+corrplot(cor_matrix, method = "color", type = "upper", 
+         tl.cex = 0.7, tl.col = "black", addCoef.col = "black", number.cex = 0.5)
+print(cor_matrix)
+
+# Find indices of highly correlated variables (threshold > 0.8)
+high_corr_indices <- findCorrelation(cor_matrix, cutoff = 0.8, names = TRUE)
+
+# Remove them from the dataset
+filtered_data <- numeric_data[, !colnames(numeric_data) %in% high_corr_indices]
+
+head(filtered_data)
+
+# Apply z-transformation
+z_scaled_data <- as.data.frame(scale(filtered_data))
+
+# View the result
+head(z_scaled_data)
+summary(z_scaled_data)
+
+# Add filename back
+z_scaled_data <- cbind(Filename, z_scaled_data)
+head(z_scaled_data)
+
+# Extract site information and store in a new column called site
+z_scaled_data$Site <- str_extract(z_scaled_data$Filename, "^.*?_.*?(?=_)")
+head(z_scaled_data[c("Filename", "Site")])
+
+#Extract datetime
+z_scaled_data <- z_scaled_data %>%
+  mutate(
+    # Extract datetime string (e.g., "20250513_120000") using regex
+    datetime_str = str_extract(Filename, "\\d{8}_\\d{6}"),
+    
+    # Parse into POSIXct format (YYYYMMDD_HHMMSS)
+    Datetime = as.POSIXct(datetime_str, format = "%Y%m%d_%H%M%S")
+  )
+
+# Round timestamps to the nearest 10
+z_scaled_data <- z_scaled_data %>%
+  mutate(
+    Datetime = round_date(Datetime, unit = "10 minutes")
+  )
+
+head(z_scaled_data)
+
+# Check for gaps in the time series 
+gaps <- z_scaled_data %>%
+  arrange(Site, Datetime) %>%
+  group_by(Site) %>%
+  mutate(time_diff = as.numeric(Datetime - lag(Datetime), units = "secs")) %>%
+  filter(!is.na(time_diff) & time_diff != 600) %>%
+  select(Site, Filename, Datetime, time_diff)
+
+gaps
+
+write.csv(z_scaled_data, "z_scaled_data.csv")
+
+#### Part 2. Tapestry plots with 1 index ####
+
+# Define base output directory
+base_output_dir <- "C:\\Users\\Administrador\\OneDrive - McGill University\\Gault Data\\Terrestrial monochrome plots"
+
+# Min-max scaling function
+min_max_scale <- function(x) {
+  (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+}
+
+# Split main dataframe by Site
+site_dfs <- split(z_scaled_data, z_scaled_data$Site)
+
+# Loop through each site
+for (site_name in names(site_dfs)) {
+  
+  site_data <- site_dfs[[site_name]]
+  
+  # Skip if 'Datetime' column is missing
+  if (!"Datetime" %in% names(site_data)) {
+    warning(paste("Skipping site:", site_name, "- missing 'Datetime' column"))
+    next
+  }
+  
+  # Ensure Datetime is POSIXct
+  if (!inherits(site_data$Datetime, "POSIXct")) {
+    site_data$Datetime <- as.POSIXct(site_data$Datetime)
+  }
+  
+  # Identify numeric columns to scale
+  cols_to_exclude <- c("Datetime", "time_posix")
+  numeric_vars <- names(site_data)[sapply(site_data, is.numeric)]
+  cols_to_plot <- setdiff(numeric_vars, cols_to_exclude)
+  
+  # Apply min-max scaling
+  site_data_scaled <- site_data
+  site_data_scaled[cols_to_plot] <- lapply(site_data_scaled[cols_to_plot], min_max_scale)
+  
+  # Add date and time_of_day columns
+  site_data_scaled <- site_data_scaled %>%
+    mutate(
+      date = as.Date(Datetime),
+      time_of_day = as_hms(Datetime)
+    )
+  
+  # Create subfolder for this site
+  site_output_dir <- file.path(base_output_dir, site_name)
+  dir.create(site_output_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  # Loop through each variable to plot
+  for (var in cols_to_plot) {
+    # Generate grayscale HEX codes
+    site_data_scaled$HEX_codes <- rgb(
+      red = site_data_scaled[[var]],
+      green = site_data_scaled[[var]],
+      blue = site_data_scaled[[var]],
+      maxColorValue = 1
+    )
+    
+    # Create heatmap
+    p <- ggplot(site_data_scaled, aes(x = time_of_day, y = date)) +
+      geom_tile(aes(fill = HEX_codes), color = "black") +
+      scale_fill_identity() +
+      labs(
+        title = paste("Heatmap of", var, "at", site_name),
+        x = "Time of Day",
+        y = "Date"
+      ) +
+      scale_x_time(
+        breaks = scales::breaks_width("2 hours"),
+        labels = scales::time_format("%H:%M")
+      ) +
+      scale_y_date(
+        date_breaks = "1 week",
+        date_labels = "%b %d"
+      ) +
+      theme_bw()
+    
+    # Save to file
+    ggsave(
+      filename = file.path(site_output_dir, paste0("Heatmap_", var, ".png")),
+      plot = p,
+      width = 10,
+      height = 10,
+      dpi = 300
+    )
+  }
+}
+
+#### Part 3. Tapestry plots with 3 indices ####
+
+# Load necessary packages
+library(lubridate)
+library(dplyr)
+library(hms)
+library(ggplot2)
+
+# To select by site: replace all (M006_data_to_plot) and change in the filter (grepl) function below. 
+
+# Step 1: Filter to J001 data
+M006_data_to_plot <- z_scaled_data %>% filter(grepl("^M006", Site))
+
+# Step 2: Extract datetime string from Filename
+M006_data_to_plot$datetime_string <- str_extract(M006_data_to_plot$Filename, "\\d{8}_\\d{6}")
+
+# Step 3: Convert to POSIXct
+M006_data_to_plot$time_posix <- as.POSIXct(M006_data_to_plot$datetime_string, format = "%Y%m%d_%H%M%S")
+
+# Round to nearest 10 minutes
+M006_data_to_plot$Datetime <- round_date(M006_data_to_plot$Datetime, unit = "10 minutes")
+
+# Extract date and time parts
+M006_data_to_plot <- M006_data_to_plot %>%
+  mutate(
+    date = as.Date(Datetime),
+    time = format(Datetime, "%H:%M:%S"),
+    time_of_day = as_hms(Datetime),
+    datetime_string = format(Datetime, "%Y%m%d_%H%M%S")  # regenerate based on rounded time
+  )
+
+# Identify numeric columns to scale (excluding Datetime)
+cols_to_scale <- names(M006_data_to_plot)[sapply(M006_data_to_plot, is.numeric)]
+cols_to_scale <- setdiff(cols_to_scale, "Datetime")  # exclude Datetime
+
+# Min-max scaling function
+min_max_scale <- function(x) {
+  (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+}
+
+# Apply scaling
+M006_data_to_plot[cols_to_scale] <- lapply(M006_data_to_plot[cols_to_scale], min_max_scale)
+
+# Generate HEX codes using selected indices
+M006_data_to_plot$HEX_codes <- rgb(
+  red = M006_data_to_plot$BI,
+  green = M006_data_to_plot$EPS,
+  blue = M006_data_to_plot$EPS_KURT,
+  maxColorValue = 1
+)
+
+# Regenerate time_posix from rounded datetime_string (for safety)
+M006_data_to_plot$time_posix <- as.POSIXct(M006_data_to_plot$datetime_string, format = "%Y%m%d_%H%M%S")
+
+# 🖼️ Create the plot
+ggplot(M006_data_to_plot, aes(x = time_of_day, y = date)) + 
+  geom_tile(aes(fill = HEX_codes), color = "black") + 
+  labs(x = "Time of day", y = "Date") + 
+  scale_x_time(
+    breaks = scales::breaks_width("2 hours"),
+    labels = scales::time_format("%H:%M")
+  ) + 
+  scale_y_date(
+    date_breaks = "1 week",
+    date_labels = "%b %Y"
+  ) + 
+  theme_bw() + 
+  scale_fill_identity()
+
+ggsave(
+  filename = "M006_data_plot.jpeg",
+  plot = last_plot(),   # or replace with your ggplot object if you stored it
+  device = "jpeg",
+  dpi = 300,
+  width = 8,   # adjust width in inches
+  height = 8    # adjust height in inches
+)
+
+#### Part 4. Ordination ####
+
+z_scaled_data <- read.csv("z_scaled_data.csv")
+
+head(z_scaled_data)
+
+library(dplyr)
+library(lubridate)
+
+# Convert Datetime
+z_scaled_data$Datetime <- as.POSIXct(z_scaled_data$Datetime)
+z_scaled_data <- z_scaled_data %>% mutate(DateOnly = as.Date(Datetime))
+
+# Filter for full days per site
+expected_entries <- 24 * 6  # 10-min intervals
+
+# Count entries per day per site
+entries_per_site_day <- z_scaled_data %>%
+  group_by(Site, DateOnly) %>%
+  summarise(n_entries = n(), .groups = "drop")
+
+# Keep only days with full entries per site
+full_days_per_site <- entries_per_site_day %>%
+  filter(n_entries == expected_entries)
+
+# Subset original data to full days per site
+Full_Spec_FullDays <- z_scaled_data %>%
+  inner_join(full_days_per_site, by = c("Site", "DateOnly")) %>%
+  select(-DateOnly, -n_entries)
+
+# Find minimum number of rows across all sites
+min_rows <- Full_Spec_FullDays %>%
+  group_by(Site) %>%
+  summarise(n_rows = n(), .groups = "drop") %>%
+  summarise(min_n = min(n_rows)) %>%
+  pull(min_n)
+
+# Downsample each site independently to min_rows
+set.seed(123)
+Full_Spec_Balanced <- Full_Spec_FullDays %>%
+  group_by(Site) %>%
+  slice_sample(n = min_rows) %>%
+  ungroup()
+
+table(Full_Spec_Balanced$Site)
+
+# numeric data for PCA ###
+
+numeric_data <- Full_Spec_Balanced %>%
+  select(where(is.numeric))
+
+# Scale the numeric data (mean=0, sd=1)
+numeric_scaled <- scale(numeric_data)
+
+# Run PCA
+set.seed(123)
+
+pca_res <- prcomp(numeric_scaled, center = TRUE, scale. = TRUE)
+
+# View summary of PCA
+print(summary(pca_res))
+
+# Extract PCA scores and add Site info
+
+pca_scores <- as.data.frame(pca_res$x)
+pca_scores$Site <- Full_Spec_Balanced$Site
+
+# Calculate % variance explained
+var_explained <- round(100 * (pca_res$sdev^2 / sum(pca_res$sdev^2)), 1)
+
+# Plot PCA results
+
+# Define colors manually (you can customize these)
+site_colors <- c(
+  "J001_Maple" = "#4C72B0",
+  "J002_Oak" = "#55A868",
+  "J003_Lake" = "#8172B2",
+  "M006_Beaver" = "#CCB974",
+  "M007_Wetland" = "#64B5CD",
+  "M008_Oak" = "#C44E52",
+  "M009_Maple" = "#8C8C8C",
+  "M010_Beaver" = "#E17C05"
+)
+
+# PCA scatter plot
+p1 <- ggplot(pca_scores, aes(x = PC1, y = PC2, color = Site)) +
+  geom_point(size = 1, alpha = 0.1) +
+  stat_ellipse(level = 0.90, linetype = 2, size = 1) +  
+  scale_color_manual(values = site_colors) +
+  theme_bw() +
+  labs(
+    x = paste0("PC1 (", sprintf("%.1f", var_explained[1]), "%)"),
+    y = paste0("PC2 (", sprintf("%.1f", var_explained[2]), "%)")
+  ) +
+  annotate("text", 
+           x = 10,
+           y = 10,
+           label = "(Full spectral range: 10 Hz - 24,000 Hz)", 
+           hjust = 1, vjust = 1,
+           size = 4) +
+  coord_cartesian(xlim = c(-10, 10), ylim = c(-10, 10))
+
+p1
 ```
 
 
