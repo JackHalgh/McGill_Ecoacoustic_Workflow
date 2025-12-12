@@ -631,46 +631,28 @@ library(lubridate)
 library(dplyr)
 library(hms)
 library(ggplot2)
+library(readr)
+library(dplyr)
+library(purrr)
 
 # Set working directory
-setwd("C:/Users/Administrador/OneDrive - McGill University/Gault Data/Raw acoustic indices (terrestrial)")
+setwd("D:/DATA - ALL COMBINED/Raw acoustic indices (Terrestrial)")
 
 # Load data
-J001_May_July_2025 <- read.csv("J001_Maple_Beech_alpha_acoustic_indices_results_May_July_2025.csv")
-J001_July_August_2025 <- read.csv("J001_Maple_Beech_alpha_acoustic_indices_results_July_August_2025.csv")
-J002_May_July_2025 <- read.csv("J002_Oak_alpha_acoustic_indices_results_May_July_2025.csv")
-J002_July_August_2025 <- read.csv("J002_Oak_alpha_acoustic_indices_results_July_August_2025.csv")
-J003_May_July_2025 <- read.csv("J003_Lake_Shore_alpha_acoustic_indices_results_May_July_2025.csv")
-J003_July_August_2025 <- read.csv("J003_Lake_Shore_alpha_acoustic_indices_results_July_August_2025.csv")
-M006_May_July_2025 <- read.csv("M006_Beaver_Pond_alpha_acoustic_indices_results_May_July_2025.csv")
-M006_July_August_2025 <- read.csv("M006_Beaver_Pond_alpha_acoustic_indices_results_July_August_2025.csv")
-M007_May_July_2025 <- read.csv("M007_Wetland_alpha_acoustic_indices_results_May_July_2025.csv")  
-M007_July_August_2025 <- read.csv("M007_Wetland_alpha_acoustic_indices_results_July_August_2025.csv")  
-M008_May_July_2025 <- read.csv("M008_Oak_alpha_acoustic_indices_results_May_July_2025.csv")
-M008_July_August_2025 <- read.csv("M008_Oak_alpha_acoustic_indices_results_July_August_2025.csv")
-M009_May_July_2025 <- read.csv("M009_Maple_Beech_alpha_acoustic_indices_results_May_July_2025.csv")
-M009_July_August_2025 <- read.csv("M009_Maple_Beech_alpha_acoustic_indices_results_July_August_2025.csv")
-M010_May_July_2025 <- read.csv("M010_Beaver_Pond_alpha_acoustic_indices_results_May_July_2025.csv")  
-M010_July_August_2025 <- read.csv("M010_Beaver_Pond_alpha_acoustic_indices_results_July_August_2025.csv")  
 
-# Merge all data sets into one
-merged_data <- rbind(
-  J001_May_July_2025, J001_July_August_2025,
-  J002_May_July_2025, J002_July_August_2025,
-  J003_May_July_2025, J003_July_August_2025,
-  M006_May_July_2025, M006_July_August_2025,
-  M007_May_July_2025, M007_July_August_2025,
-  M008_May_July_2025, M008_July_August_2025,
-  M009_May_July_2025, M009_July_August_2025,
-  M010_May_July_2025, M010_July_August_2025
-)
-head(merged_data)
+# List all CSV files in the directory
+csv_files <- list.files(pattern = ".csv$", full.names = TRUE)
+
+# Read and merge all CSV files
+merged_df <- csv_files %>%
+  set_names() %>%  # so we retain the file path as an identifier
+  map_df(~ read_csv(.x, show_col_types = FALSE), .id = "source_file")
 
 # Extract filename
-Filename <- merged_data$filename
+Filename <- merged_df$filename
 
-# Subset numeric columns from 2 to 61
-numeric_data <- merged_data[, 2:61]
+# Subset numeric columns from 3 to 62
+numeric_data <- merged_df[, 3:62]
 
 # Compute correlation matrix
 cor_matrix <- cor(numeric_data, use = "complete.obs")
@@ -721,22 +703,12 @@ z_scaled_data <- z_scaled_data %>%
 
 head(z_scaled_data)
 
-# Check for gaps in the time series 
-gaps <- z_scaled_data %>%
-  arrange(Site, Datetime) %>%
-  group_by(Site) %>%
-  mutate(time_diff = as.numeric(Datetime - lag(Datetime), units = "secs")) %>%
-  filter(!is.na(time_diff) & time_diff != 600) %>%
-  select(Site, Filename, Datetime, time_diff)
-
-gaps
-
-write.csv(z_scaled_data, "z_scaled_data.csv")
+write.csv(z_scaled_data, "Terrestrial_Gault_Data_Nov_25.csv")
 
 #### Part 2. Tapestry plots with 1 index ####
 
 # Define base output directory
-base_output_dir <- "C:\\Users\\Administrador\\OneDrive - McGill University\\Gault Data\\Terrestrial monochrome plots"
+base_output_dir <- "D:\\DATA - ALL COMBINED\\Tapestry plots with 1 index"
 
 # Min-max scaling function
 min_max_scale <- function(x) {
@@ -830,22 +802,22 @@ library(dplyr)
 library(hms)
 library(ggplot2)
 
-# To select by site: replace all (M006_data_to_plot) and change in the filter (grepl) function below. 
+# To select by site: replace all (M007_data_to_plot) and change in the filter (grepl) function below. 
 
 # Step 1: Filter to J001 data
-M006_data_to_plot <- z_scaled_data %>% filter(grepl("^M006", Site))
+M007_data_to_plot <- z_scaled_data %>% filter(grepl("^M007", Site))
 
 # Step 2: Extract datetime string from Filename
-M006_data_to_plot$datetime_string <- str_extract(M006_data_to_plot$Filename, "\\d{8}_\\d{6}")
+M007_data_to_plot$datetime_string <- str_extract(M007_data_to_plot$Filename, "\\d{8}_\\d{6}")
 
 # Step 3: Convert to POSIXct
-M006_data_to_plot$time_posix <- as.POSIXct(M006_data_to_plot$datetime_string, format = "%Y%m%d_%H%M%S")
+M007_data_to_plot$time_posix <- as.POSIXct(M007_data_to_plot$datetime_string, format = "%Y%m%d_%H%M%S")
 
 # Round to nearest 10 minutes
-M006_data_to_plot$Datetime <- round_date(M006_data_to_plot$Datetime, unit = "10 minutes")
+M007_data_to_plot$Datetime <- round_date(M007_data_to_plot$Datetime, unit = "10 minutes")
 
 # Extract date and time parts
-M006_data_to_plot <- M006_data_to_plot %>%
+M007_data_to_plot <- M007_data_to_plot %>%
   mutate(
     date = as.Date(Datetime),
     time = format(Datetime, "%H:%M:%S"),
@@ -854,30 +826,30 @@ M006_data_to_plot <- M006_data_to_plot %>%
   )
 
 # Identify numeric columns to scale (excluding Datetime)
-cols_to_scale <- names(M006_data_to_plot)[sapply(M006_data_to_plot, is.numeric)]
+cols_to_scale <- names(M007_data_to_plot)[sapply(M007_data_to_plot, is.numeric)]
 cols_to_scale <- setdiff(cols_to_scale, "Datetime")  # exclude Datetime
 
-# Min-max scaling function
-min_max_scale <- function(x) {
+# helper to scale values between 0 and 1
+normalize <- function(x) {
   (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
 }
 
-# Apply scaling
-M006_data_to_plot[cols_to_scale] <- lapply(M006_data_to_plot[cols_to_scale], min_max_scale)
-
-# Generate HEX codes using selected indices
-M006_data_to_plot$HEX_codes <- rgb(
-  red = M006_data_to_plot$BI,
-  green = M006_data_to_plot$EPS,
-  blue = M006_data_to_plot$EPS_KURT,
-  maxColorValue = 1
+# generate HEX color codes using existing columns
+M007_data_to_plot$HEX_codes <- rgb(
+  red   = normalize(M007_data_to_plot$SKEWf),   # corrected from EPS_SKEW
+  green = normalize(M007_data_to_plot$EPS),
+  blue  = normalize(M007_data_to_plot$rBA)
 )
 
+# Apply scaling
+M007_data_to_plot[cols_to_scale] <- lapply(M007_data_to_plot[cols_to_scale], min_max_scale)
+
+
 # Regenerate time_posix from rounded datetime_string (for safety)
-M006_data_to_plot$time_posix <- as.POSIXct(M006_data_to_plot$datetime_string, format = "%Y%m%d_%H%M%S")
+M007_data_to_plot$time_posix <- as.POSIXct(M007_data_to_plot$datetime_string, format = "%Y%m%d_%H%M%S")
 
 # 🖼️ Create the plot
-ggplot(M006_data_to_plot, aes(x = time_of_day, y = date)) + 
+ggplot(M007_data_to_plot, aes(x = time_of_day, y = date)) + 
   geom_tile(aes(fill = HEX_codes), color = "black") + 
   labs(x = "Time of day", y = "Date") + 
   scale_x_time(
@@ -891,13 +863,30 @@ ggplot(M006_data_to_plot, aes(x = time_of_day, y = date)) +
   theme_bw() + 
   scale_fill_identity()
 
+
+# Create the plot and assign to an object
+p <- ggplot(M007_data_to_plot, aes(x = time_of_day, y = date)) + 
+  geom_tile(aes(fill = HEX_codes), color = "black") + 
+  labs(x = "Time of day", y = "Date") + 
+  scale_x_time(
+    breaks = scales::breaks_width("2 hours"),
+    labels = scales::time_format("%H:%M")
+  ) + 
+  scale_y_date(
+    limits = c(min(M007_data_to_plot$date, na.rm = TRUE), as.Date("2025-06-25")),
+    date_breaks = "1 week",
+    date_labels = "%b %Y"
+  ) + 
+  theme_bw() + 
+  scale_fill_identity()
+
+# Save as JPEG at 300 dpi
 ggsave(
-  filename = "M006_data_plot.jpeg",
-  plot = last_plot(),   # or replace with your ggplot object if you stored it
-  device = "jpeg",
-  dpi = 300,
-  width = 8,   # adjust width in inches
-  height = 8    # adjust height in inches
+  filename = "M007_plot.jpeg",
+  plot = p,
+  width = 8,       # width in inches
+  height = 8,       # height in inches
+  dpi = 300
 )
 
 #### Part 4. Ordination ####
